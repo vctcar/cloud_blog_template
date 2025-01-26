@@ -16,6 +16,19 @@ Resources:
             Action: 'sts:AssumeRole'
       ManagedPolicyArns:
         - 'arn:aws:iam::aws:policy/service-role/AWSAppRunnerServicePolicyForECRAccess'
+      Policies:
+        - PolicyName: AppRunnerServicePolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'apprunner:*'
+                  - 'ecr:GetAuthorizationToken'
+                  - 'ecr:BatchCheckLayerAvailability'
+                  - 'ecr:GetDownloadUrlForLayer'
+                  - 'ecr:BatchGetImage'
+                Resource: '*'
 
   BlogECRRepository:
     Type: 'AWS::ECR::Repository'
@@ -34,7 +47,7 @@ Resources:
           AccessRoleArn: !GetAtt BlogDeploymentRole.Arn
         AutoDeploymentsEnabled: true
         ImageRepository:
-          ImageIdentifier: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/blog-template:latest
+          ImageIdentifier: !Sub ${BlogECRRepository.RepositoryUri}:latest
           ImageRepositoryType: ECR
           ImageConfiguration:
             Port: 3000
@@ -48,4 +61,4 @@ Outputs:
     Value: !GetAtt BlogAppRunnerService.ServiceUrl
   ECRRepositoryURI:
     Description: URI of the ECR repository
-    Value: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/blog-template
+    Value: !GetAtt BlogECRRepository.RepositoryUri
