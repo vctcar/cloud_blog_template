@@ -1,0 +1,59 @@
+name: Setup Infrastructure
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy (dev/prod)'
+        required: true
+        default: 'dev'
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment }}
+    outputs:
+      app-runner-service-arn: ${{ steps.create-service.outputs.service-arn }}
+      ecr-repository-uri: ${{ steps.create-ecr.outputs.repository-uri }}
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+      
+      - name: Create ECR Repository
+        id: create-ecr
+        run: |
+          ECR_URI=$(aws ecr create-repository \
+            --repository-name ${{ github.event.inputs.environment }}-nextjs-app \
+            --image-scanning-configuration scanOnPush=true \
+            --query 'repository.repositoryUri' \
+            --output text || \
+            aws ecr describe-repositories \
+            --repository-names ${{ github.event.inputs.environment }}-nextjs-app \
+            --query 'repositories[0].repositoryUri' \
+            --output text)
+          echo "repository-uri=${ECR_URI}" >> $GITHUB_OUTPUT
+          
+      - name: Deploy CloudFormation Stack
+        run: |
+          aws cloudformation deploy \
+            --template-file infrastructure/cloudformation/deploy-app-runner.yml \
+            --stack-name ${{ github.event.inputs.environment }}-nextjs-stack \
+            --capabilities CAPABILITY_IAM \
+            --parameter-overrides \
+              Environment=${{ github.event.inputs.environment }} \
+              ECRRepositoryURI=${{ steps.create-ecr.outputs.repository-uri }}
+              
+      - name: Get App Runner Service ARN
+        id: create-service
+        run: |
+          SERVICE_ARN=$(aws cloudformation describe-stacks \
+            --stack-name ${{ github.event.inputs.environment }}-nextjs-stack \
+            --query 'Stacks[0].Outputs[?OutputKey==`AppRunnerServiceArn`].OutputValue' \
+            --output text)
+          echo "service-arn=${SERVICE_ARN}" >> $GITHUB_OUTPUT

@@ -1,41 +1,103 @@
-name: Deploy to AWS App Runner
-
+name: Build, Push and Deploy
 on:
   push:
-    branches:
-      - main
+    branches: 
+      - main  # for prod
+      - develop  # for dev
+    paths-ignore:
+      - 'infrastructure/**'
+      - '**.md'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        type: choice
+        options:
+          - dev
+          - prod
+        default: 'dev'
+
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION }}
 
 jobs:
-  deploy:
+  determine-environment:
     runs-on: ubuntu-latest
-
+    outputs:
+      environment: ${{ steps.set-env.outputs.environment }}
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
+      - id: set-env
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "environment=${{ github.event.inputs.environment }}" >> $GITHUB_OUTPUT
+          elif [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            echo "environment=prod" >> $GITHUB_OUTPUT
+          else
+            echo "environment=dev" >> $GITHUB_OUTPUT
+          fi
+
+  build-and-deploy:
+    needs: determine-environment
+    runs-on: ubuntu-latest
+    environment: ${{ needs.determine-environment.outputs.environment }}
+    
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Next.js app
+        env:
+          NODE_ENV: ${{ needs.determine-environment.outputs.environment == 'prod' && 'production' || 'development' }}
+        run: npm run build
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v1
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
+          aws-region: ${{ env.AWS_REGION }}
 
       - name: Login to Amazon ECR
         id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v1
+        uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build, tag, and push image to Amazon ECR
+      - name: Build and push Docker image
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: blog-template
-          IMAGE_TAG: latest
+          ECR_REPOSITORY: ${{ needs.determine-environment.outputs.environment }}-nextjs-app
+          IMAGE_TAG: ${{ github.sha }}
         run: |
-          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+          docker build \
+            --build-arg NODE_ENV=${{ needs.determine-environment.outputs.environment == 'prod' && 'production' || 'development' }} \
+            -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
+            -t $ECR_REGISTRY/$ECR_REPOSITORY:latest .
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
 
-      - name: Deploy to AWS App Runner
-        env:
-          SERVICE_NAME: blog-template
-          IMAGE_URI: ${{ steps.login-ecr.outputs.registry }}/blog-template:latest
+      - name: Deploy to App Runner
         run: |
-          aws apprunner create-service --service-name $SERVICE_NAME --source-configuration ImageRepository={ImageIdentifier=$IMAGE_URI,ImageRepositoryType=ECR}
+          aws apprunner start-deployment \
+            --service-arn ${{ secrets[format('{0}_APP_RUNNER_SERVICE', needs.determine-environment.outputs.environment == 'prod' && 'PROD' || 'DEV')] }} \
+            --source-configuration imageRepository='{
+              "imageIdentifier": "${{ steps.login-ecr.outputs.registry }}/${{ needs.determine-environment.outputs.environment }}-nextjs-app:${{ github.sha }}",
+              "imageRepositoryType": "ECR",
+              "imageConfiguration": {
+                "port": "3000",
+                "runtimeEnvironmentVariables": [
+                  {
+                    "name": "NODE_ENV",
+                    "value": "${{ needs.determine-environment.outputs.environment == 'prod' && 'production' || 'development' }}"
+                  }
+                ]
+              }
+            }'
