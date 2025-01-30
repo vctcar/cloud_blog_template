@@ -1,36 +1,142 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Next.js Blog Template with AWS App Runner
 
-## Getting Started
+A production-ready Next.js blog template with automated deployment to AWS App Runner using GitHub Actions. This project features a dual-environment setup (development and production) with infrastructure as code using AWS CloudFormation.
 
-First, run the development server:
+## 🚀 Features
+
+- Next.js 14+ application with TypeScript support
+- Multi-environment deployment pipeline (dev/prod)
+- Infrastructure as Code using AWS CloudFormation
+- Containerized application using Docker
+- Automated CI/CD with GitHub Actions
+- AWS App Runner for serverless container deployment
+- Amazon ECR for container registry
+- Tailwind CSS for styling
+- ESLint and TypeScript configuration included
+
+## 📋 Prerequisites
+
+- Node.js 18.x or later
+- npm or yarn
+- Docker
+- AWS Account
+- GitHub Account
+- AWS CLI configured locally
+
+## 🛠️ Local Development
+
+1. Clone the repository:
+   ```bash
+   git clone [your-repository-url]
+   cd [repository-name]
+   ```
+
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+
+3. Start the development server:
+   ```bash
+   npm run dev
+   ```
+
+4. Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+## 🐳 Docker Support
+
+Build the Docker image locally:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+docker build -t blog-template .
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Run the container:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+docker run -p 3000:3000 blog-template
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## 🏗️ Infrastructure Setup
 
-## Learn More
+This project uses AWS App Runner for deployment. The infrastructure is defined using AWS CloudFormation in the `infrastructure/cloudformation` directory.
 
-To learn more about Next.js, take a look at the following resources:
+### Setting up the Infrastructure
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+1. Navigate to the GitHub Actions tab in your repository
+2. Run the "Setup Infrastructure" workflow
+3. Select the environment (dev/prod)
+4. The workflow will:
+   - Deploy the CloudFormation stack
+   - Create necessary AWS resources
+   - Set up required GitHub secrets
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Required AWS resources:
+- ECR Repository
+- IAM Roles and Policies
+- App Runner Service
 
-## Deploy on Vercel
+## 📦 Deployment
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+The project includes two main GitHub Actions workflows:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+1. **Infrastructure Setup** (`infra-setup.yml`):
+   - Sets up the AWS infrastructure
+   - Creates necessary resources
+   - Configures environment secrets
+
+2. **Build, Push and Deploy** (`deploy-push.yaml`):
+   - Builds the Next.js application
+   - Creates and pushes Docker image to ECR
+   - Deploys to AWS App Runner
+   - Supports both development and production environments
+
+### Automatic Deployments
+
+- Pushing to `main` triggers a production deployment
+- Pushing to `develop` triggers a development deployment
+- Manual deployments can be triggered from the GitHub Actions interface
+
+## 🔑 Required Secrets
+
+Set up the following secrets in your GitHub repository:
+
+- `AWS_ACCESS_KEY_ID`
+- `AWS_SECRET_ACCESS_KEY`
+- `AWS_REGION`
+- `AWS_ROLE_TO_ASSUME`
+- `DEV_ECR_REPOSITORY`
+- `PROD_ECR_REPOSITORY`
+
+Environment-specific secrets will be automatically created during infrastructure setup.
+
+## 📁 Project Structure
+
+```
+.
+├── Dockerfile                 # Multi-stage Docker build
+├── infrastructure
+│   ├── cloudformation        # AWS CloudFormation templates
+│   └── scripts               # Infrastructure scripts
+├── src
+│   ├── app                   # Next.js app directory
+│   ├── components            # React components
+│   ├── content              # Blog/portfolio content
+│   ├── layouts              # Page layouts
+│   └── lib                  # Utility functions
+```
+
+## 🛡️ Security
+
+- ECR repository configured with image scanning
+- IAM roles with least privilege access
+- Secure secrets management
+- Environment isolation between dev and prod
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Commit your changes
+4. Push to the branch
+5. Create a Pull Request
