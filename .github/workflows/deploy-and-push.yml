@@ -73,7 +73,7 @@ jobs:
       - name: Build and push Docker image
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: ${{ needs.determine-environment.outputs.environment }}-nextjs-app
+          ECR_REPOSITORY: ${{ secrets[needs.determine-environment.outputs.environment == 'prod' ? 'PROD_ECR_REPOSITORY' : 'DEV_ECR_REPOSITORY'] }}
           IMAGE_TAG: ${{ github.sha }}
         run: |
           docker build \
