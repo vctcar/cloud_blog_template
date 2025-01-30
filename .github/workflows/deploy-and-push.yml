@@ -75,9 +75,12 @@ jobs:
       - name: Build and push Docker image
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: ${{ secrets[needs.determine-environment.outputs.environment == 'prod' ? 'PROD_ECR_REPOSITORY' : 'DEV_ECR_REPOSITORY'] }}
-          IMAGE_TAG: ${{ github.sha }}
         run: |
+          ECR_REPOSITORY=${{ secrets.PROD_ECR_REPOSITORY }}
+          if [ "${{ needs.determine-environment.outputs.environment }}" != "prod" ]; then
+            ECR_REPOSITORY=${{ secrets.DEV_ECR_REPOSITORY }}
+          fi
+          IMAGE_TAG=${{ github.sha }}
           docker build \
             --build-arg NODE_ENV=${{ needs.determine-environment.outputs.environment == 'prod' && 'production' || 'development' }} \
             -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
@@ -89,7 +92,7 @@ jobs:
       - name: Deploy to App Runner
         run: |
           aws apprunner start-deployment \
-            --service-arn ${{ secrets[format('{0}_APP_RUNNER_SERVICE', needs.determine-environment.outputs.environment == 'prod' && 'PROD' || 'DEV')] }} \
+            --service-arn ${{ secrets[format('{0}_AWS_ROLE_TO_ASSUME', needs.determine-environment.outputs.environment == 'prod' && 'PROD' || 'dev')] }} \
             --source-configuration imageRepository='{
               "imageIdentifier": "${{ steps.login-ecr.outputs.registry }}/${{ needs.determine-environment.outputs.environment }}-nextjs-app:${{ github.sha }}",
               "imageRepositoryType": "ECR",
