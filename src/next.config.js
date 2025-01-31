@@ -1,9 +1,12 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: 'standalone',  // Enable standalone output
+  output: 'standalone',
   experimental: {
-    // Optional: Enable if you're using app directory
-    appDir: true,
+    appDir: true
+  },
+  eslint: {
+    // Don't run ESLint during builds - we'll handle it separately
+    ignoreDuringBuilds: true
   }
 }
 
