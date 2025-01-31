@@ -33,7 +33,8 @@ jobs:
 
       - name: Build Next.js app
         env:
-          NODE_ENV: ${{ github.event.inputs.environment == 'prod' && 'production' || 'development' }}
+          NODE_ENV: production
+          #NODE_ENV: ${{ github.event.inputs.environment == 'prod' && 'production' || 'development' }}
           NEXT_TELEMETRY_DISABLED: 1
         run: |
           # Clear next build cache
