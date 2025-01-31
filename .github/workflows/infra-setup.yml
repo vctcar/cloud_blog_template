@@ -34,7 +34,12 @@ jobs:
       - name: Build Next.js app
         env:
           NODE_ENV: ${{ github.event.inputs.environment == 'prod' && 'production' || 'development' }}
-        run: npm run build
+          NEXT_TELEMETRY_DISABLED: 1
+        run: |
+          # Clear next build cache
+          rm -rf .next
+          # Build the application
+          npm run build
 
       - name: Deploy CloudFormation Stack
         id: cloudformation
