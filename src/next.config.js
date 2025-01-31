@@ -1,8 +1,10 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: 'standalone',  // Instead of experimental.outputStandalone
-  reactStrictMode: true,
-  swcMinify: true,
+  output: 'standalone',  // Enable standalone output
+  experimental: {
+    // Optional: Enable if you're using app directory
+    appDir: true,
+  }
 }
 
 module.exports = nextConfig
