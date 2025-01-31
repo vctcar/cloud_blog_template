@@ -17,6 +17,10 @@ ENV NEXT_TELEMETRY_DISABLED 1
 # Build the application
 RUN npm run build
 
+# Debug: List contents of .next directory
+RUN echo "Contents of .next directory:" && \
+    ls -la .next/
+
 FROM node:18-alpine AS runner
 WORKDIR /app
 
@@ -32,6 +36,9 @@ RUN adduser --system --uid 1001 nextjs
 # Copy only necessary files
 COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+
+# Debug: Try to copy standalone or show error
+RUN echo "Attempting to copy standalone directory..."
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 
 # Switch to non-root user
