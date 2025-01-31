@@ -1,4 +1,4 @@
-name: 1. Setup Infrastructure
+name: Setup Infrastructure
 on:
   workflow_dispatch:
     inputs:
@@ -13,6 +13,18 @@ jobs:
     environment: ${{ github.event.inputs.environment }}
     
     steps:
+      - name: Pre-deployment Instructions
+        run: |
+          echo "=================================================="
+          echo "🚀 Starting infrastructure setup process"
+          echo "=================================================="
+          echo "⚠️  IMPORTANT: After this workflow completes, you will need to:"
+          echo "1. Go to your repository's Settings"
+          echo "2. Navigate to Environments"
+          echo "3. Select or create the '${{ github.event.inputs.environment }}' environment"
+          echo "4. Add the ECR repository URI as a secret"
+          echo "=================================================="
+          
       - uses: actions/checkout@v4
       
       - name: Configure AWS credentials
@@ -25,7 +37,6 @@ jobs:
       - name: Deploy Base Infrastructure
         id: cloudformation
         run: |
-          # Deploy ECR and IAM resources first
           aws cloudformation deploy \
             --template-file infrastructure/cloudformation/ecr-setup.yml \
             --stack-name ${{ github.event.inputs.environment }}-ecr-stack \
@@ -40,10 +51,24 @@ jobs:
             --query 'Stacks[0].Outputs[?OutputKey==`ECRRepositoryURI`].OutputValue' \
             --output text)
           echo "ECR_URI=$ECR_URI" >> $GITHUB_ENV
-          echo "repository_uri=$ECR_URI" >> $GITHUB_OUTPUT
-          
-      - name: Set repository secrets
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Display Next Steps
         run: |
-          gh secret set "ECR_REPOSITORY_URI" -b "${{ steps.ecr.outputs.repository_uri }}" --env ${{ github.event.inputs.environment }}
+          echo "=================================================="
+          echo "✅ Infrastructure setup completed successfully!"
+          echo "=================================================="
+          echo "⚠️  REQUIRED MANUAL STEPS:"
+          echo "Please set up the following secret in your GitHub repository:"
+          echo ""
+          echo "1. Go to: Settings → Environments"
+          echo "2. Select or create environment: '${{ github.event.inputs.environment }}'"
+          echo "3. Add this secret:"
+          echo "   Name: ECR_REPOSITORY_URI"
+          echo "   Value: ${{ env.ECR_URI }}"
+          echo ""
+          echo "📋 Copy this value: ${{ env.ECR_URI }}"
+          echo ""
+          echo "Once you've added this secret, you can proceed with:"
+          echo "1. Running the 'Build and Push Image' workflow"
+          echo "2. Then running the 'Deploy to App Runner' workflow"
+          echo "=================================================="

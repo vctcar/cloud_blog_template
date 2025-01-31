@@ -76,6 +76,25 @@ Required AWS resources:
 - IAM Roles and Policies
 - App Runner Service
 
+## 🔧 First-Time Setup
+
+After running the "Setup Infrastructure" workflow, you'll need to manually configure some GitHub secrets:
+
+1. Go to your repository's Settings → Environments
+2. Select or create the environment (dev/prod)
+3. Add the following secret:
+   - Name: `ECR_REPOSITORY_URI`
+   - Value: The ECR URI provided in the workflow output
+
+This step is required before running the "Build and Push Image" workflow.
+
+### Deployment Order
+
+1. Run "Setup Infrastructure" workflow
+2. Configure the environment secret (manual step)
+3. Run "Build and Push Image" workflow
+4. Run "Deploy to App Runner" workflow
+
 ## 📦 Deployment
 
 The project includes two main GitHub Actions workflows:
