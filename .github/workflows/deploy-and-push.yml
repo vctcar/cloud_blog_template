@@ -1,12 +1,5 @@
-name: Build, Push and Deploy
+name: Build and Push Image
 on:
-  push:
-    branches: 
-      - main  # for prod
-      - develop  # for dev
-    paths-ignore:
-      - 'infrastructure/**'
-      - '**.md'
   workflow_dispatch:
     inputs:
       environment:
@@ -18,29 +11,10 @@ on:
           - prod
         default: 'dev'
 
-env:
-  AWS_REGION: ${{ secrets.AWS_REGION }}
-
 jobs:
-  determine-environment:
+  build-and-push:
     runs-on: ubuntu-latest
-    outputs:
-      environment: ${{ steps.set-env.outputs.environment }}
-    steps:
-      - id: set-env
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "environment=${{ github.event.inputs.environment }}" >> $GITHUB_OUTPUT
-          elif [ "${{ github.ref }}" = "refs/heads/main" ]; then
-            echo "environment=prod" >> $GITHUB_OUTPUT
-          else
-            echo "environment=dev" >> $GITHUB_OUTPUT
-          fi
-
-  build-and-deploy:
-    needs: determine-environment
-    runs-on: ubuntu-latest
-    environment: ${{ needs.determine-environment.outputs.environment }}
+    environment: ${{ github.event.inputs.environment }}
     
     steps:
       - uses: actions/checkout@v4
@@ -56,17 +30,19 @@ jobs:
 
       - name: Build Next.js app
         env:
-          NODE_ENV: ${{ needs.determine-environment.outputs.environment == 'prod' && 'production' || 'development' }}
-        run: npm run build
+          NODE_ENV: production
+          NEXT_PUBLIC_ENV: ${{ github.event.inputs.environment }}
+          NEXT_TELEMETRY_DISABLED: 1
+        run: |
+          rm -rf .next
+          npm run build
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
-          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }} 
-          audience: sts.amazonaws.com
+          aws-region: ${{ secrets.AWS_REGION }}
 
       - name: Login to Amazon ECR
         id: login-ecr
@@ -75,34 +51,12 @@ jobs:
       - name: Build and push Docker image
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY_URI }}
         run: |
-          ECR_REPOSITORY=${{ secrets.PROD_ECR_REPOSITORY }}
-          if [ "${{ needs.determine-environment.outputs.environment }}" != "prod" ]; then
-            ECR_REPOSITORY=${{ secrets.DEV_ECR_REPOSITORY }}
-          fi
-          IMAGE_TAG=${{ github.sha }}
           docker build \
-            --build-arg NODE_ENV=${{ needs.determine-environment.outputs.environment == 'prod' && 'production' || 'development' }} \
-            -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
-            -t $ECR_REGISTRY/$ECR_REPOSITORY:latest .
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
-          echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
-
-      - name: Deploy to App Runner
-        run: |
-          aws apprunner start-deployment \
-            --service-arn ${{ secrets[format('{0}_AWS_ROLE_TO_ASSUME', needs.determine-environment.outputs.environment == 'prod' && 'PROD' || 'dev')] }} \
-            --source-configuration imageRepository='{
-              "imageIdentifier": "${{ steps.login-ecr.outputs.registry }}/${{ needs.determine-environment.outputs.environment }}-nextjs-app:${{ github.sha }}",
-              "imageRepositoryType": "ECR",
-              "imageConfiguration": {
-                "port": "3000",
-                "runtimeEnvironmentVariables": [
-                  {
-                    "name": "NODE_ENV",
-                    "value": "${{ needs.determine-environment.outputs.environment == 'prod' && 'production' || 'development' }}"
-                  }
-                ]
-              }
-            }'
+            --build-arg NODE_ENV=production \
+            --build-arg NEXT_PUBLIC_ENV=${{ github.event.inputs.environment }} \
+            -t $ECR_REPOSITORY:latest \
+            -t $ECR_REPOSITORY:${{ github.sha }} .
+          docker push $ECR_REPOSITORY:latest
+          docker push $ECR_REPOSITORY:${{ github.sha }}

@@ -1,0 +1,60 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'ECR and IAM setup for Next.js blog deployment'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - prod
+    Description: Environment type (dev/prod)
+
+Resources:
+  BlogDeploymentRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      RoleName: !Sub ${Environment}-blog-deployment-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - build.apprunner.amazonaws.com
+                - tasks.apprunner.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWSAppRunnerServicePolicyForECRAccess'
+      Policies:
+        - PolicyName: !Sub ${Environment}-app-runner-policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'ecr:GetAuthorizationToken'
+                  - 'ecr:BatchCheckLayerAvailability'
+                  - 'ecr:GetDownloadUrlForLayer'
+                  - 'ecr:BatchGetImage'
+                  - 'ecr:InitiateLayerUpload'
+                  - 'ecr:UploadLayerPart'
+                  - 'ecr:CompleteLayerUpload'
+                  - 'ecr:PutImage'
+                Resource: '*'
+
+  BlogECRRepository:
+    Type: 'AWS::ECR::Repository'
+    Properties:
+      RepositoryName: !Sub ${Environment}-blog-template
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      ImageTagMutability: MUTABLE
+
+Outputs:
+  DeploymentRoleArn:
+    Description: ARN of the deployment role
+    Value: !GetAtt BlogDeploymentRole.Arn
+  ECRRepositoryURI:
+    Description: URI of the ECR repository
+    Value: !GetAtt BlogECRRepository.RepositoryUri

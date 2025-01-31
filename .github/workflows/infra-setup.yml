@@ -8,7 +8,7 @@ on:
         default: 'dev'
 
 jobs:
-  setup:
+  setup-base-infrastructure:
     runs-on: ubuntu-latest
     environment: ${{ github.event.inputs.environment }}
     
@@ -22,56 +22,28 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
       
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build Next.js app
-        env:
-          NODE_ENV: production
-          #NODE_ENV: ${{ github.event.inputs.environment == 'prod' && 'production' || 'development' }}
-          NEXT_TELEMETRY_DISABLED: 1
-        run: |
-          # Clear next build cache
-          rm -rf .next
-          # Build the application
-          npm run build
-
-      - name: Deploy CloudFormation Stack
+      - name: Deploy Base Infrastructure
         id: cloudformation
         run: |
+          # Deploy ECR and IAM resources first
           aws cloudformation deploy \
-            --template-file infrastructure/cloudformation/deploy-app-runner.yml \
-            --stack-name ${{ github.event.inputs.environment }}-nextjs-stack \
+            --template-file infrastructure/cloudformation/ecr-setup.yml \
+            --stack-name ${{ github.event.inputs.environment }}-ecr-stack \
             --capabilities CAPABILITY_NAMED_IAM \
             --parameter-overrides Environment=${{ github.event.inputs.environment }}
-
+            
       - name: Get ECR Repository URI
         id: ecr
         run: |
           ECR_URI=$(aws cloudformation describe-stacks \
-            --stack-name ${{ github.event.inputs.environment }}-nextjs-stack \
+            --stack-name ${{ github.event.inputs.environment }}-ecr-stack \
             --query 'Stacks[0].Outputs[?OutputKey==`ECRRepositoryURI`].OutputValue' \
             --output text)
+          echo "ECR_URI=$ECR_URI" >> $GITHUB_ENV
           echo "repository_uri=$ECR_URI" >> $GITHUB_OUTPUT
-
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Build and push Docker image
+          
+      - name: Set repository secrets
         env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: ${{ steps.ecr.outputs.repository_uri }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          docker build \
-            --build-arg NODE_ENV=${{ github.event.inputs.environment == 'prod' && 'production' || 'development' }} \
-            -t $ECR_REPOSITORY:latest \
-            -t $ECR_REPOSITORY:${{ github.sha }} .
-          docker push $ECR_REPOSITORY:latest
-          docker push $ECR_REPOSITORY:${{ github.sha }}
+          gh secret set "ECR_REPOSITORY_URI" -b "${{ steps.ecr.outputs.repository_uri }}" --env ${{ github.event.inputs.environment }}

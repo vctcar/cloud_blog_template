@@ -1,0 +1,46 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'App Runner service for Next.js blog deployment'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - prod
+    Description: Environment type (dev/prod)
+  
+  ECRImageURI:
+    Type: String
+    Description: URI of the ECR repository
+
+Resources:
+  BlogAppRunnerService:
+    Type: 'AWS::AppRunner::Service'
+    Properties:
+      ServiceName: !Sub ${Environment}-blog-template
+      SourceConfiguration:
+        AuthenticationConfiguration:
+          AccessRoleArn: !Sub arn:aws:iam::${AWS::AccountId}:role/${Environment}-blog-deployment-role
+        AutoDeploymentsEnabled: true
+        ImageRepository:
+          ImageIdentifier: !Sub ${ECRImageURI}:latest
+          ImageRepositoryType: ECR
+          ImageConfiguration:
+            Port: 3000
+            RuntimeEnvironmentVariables:
+              - Name: NODE_ENV
+                Value: production
+              - Name: NEXT_PUBLIC_ENV
+                Value: !Ref Environment
+      InstanceConfiguration:
+        Cpu: 1024
+        Memory: 2048
+
+Outputs:
+  AppRunnerServiceArn:
+    Description: ARN of the App Runner service
+    Value: !GetAtt BlogAppRunnerService.ServiceArn
+  AppRunnerServiceURL:
+    Description: URL of the App Runner service
+    Value: !GetAtt BlogAppRunnerService.ServiceUrl
