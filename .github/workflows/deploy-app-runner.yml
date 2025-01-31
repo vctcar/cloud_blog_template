@@ -1,4 +1,4 @@
-name: Deploy to App Runner
+name: 3.Deploy to App Runner
 on:
   workflow_dispatch:
     inputs:
